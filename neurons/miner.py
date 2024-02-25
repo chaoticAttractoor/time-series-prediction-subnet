@@ -237,6 +237,8 @@ def get_predictions_adaptive(
         print('run model')
         model_name = best_model.models[0]
         predicted_closes = best_model.predict(df=model_input)
+        prediction_size = model.prediction_length
+        predicted_closes = predicted_closes.drop(columns='ds').iloc[:,0].tolist()# change this 
         
     elif prediction_type == 'waverage': 
         
@@ -244,19 +246,19 @@ def get_predictions_adaptive(
                                       ground_truth=model_input['close'].tail(25),
                                       true_pred_df=model_input)
           
+          predicted_closes = predicted_closes.tolist()
+          
     else: 
         
         predicted_closes = model.average_model(df=model_input)
-        
-        
-        
-    prediction_size = model.prediction_length
-    predicted_closes = predicted_closes.drop(columns='ds').iloc[:,0].tolist()# change this 
+
+        predicted_closes = predicted_closes.tolist()
+
 
     if prediction_size== 101 : 
             predicted_closes.append(predicted_closes[-1])
 
-    print(f"Raw predictions start with: {predicted_closes[0:19]}")
+    print(f"Raw predictions endwith: {predicted_closes[90:]}")
         
 
     return predicted_closes # needs to be a list

@@ -73,9 +73,9 @@ class AdaptiveModelStack:
         
         
     def select_model(self,df,ground_truth,length=25):
-            length = length - 1
+            #length = length - 1
             k = 0.1
-            weights= np.exp(-k * np.arange(length+1))
+            weights= np.exp(-k * np.arange(length))
                         
             predictions = [ model.predict(df).drop(columns='ds') for model in self.loaded_models] 
             errors = [ mean_squared_error(prediction.values[0:length],ground_truth.values[0:length] ,sample_weight=weights, squared=False)  for prediction in predictions]
@@ -85,22 +85,21 @@ class AdaptiveModelStack:
             
     def average_model(self,df):
             predictions = [ model.predict(df).drop(columns='ds') for model in self.loaded_models] 
-            prediction_av = pd.concat(predictions,axis=0).mean(axis=0)
+            prediction_av = pd.concat(predictions,axis=1).apply(lambda x: np.average(x),axis=1).values
            #  min_eprerror = errors.index(min(errors)) # find index 
             return prediction_av
         
             
     def weighted_average_model(self,df,ground_truth,true_pred_df,length=25):
-            length = length - 1
             k = 0.1
-            weights= np.exp(-k * np.arange(length+1))
+            weights= np.exp(-k * np.arange(length))
     
             predictions = [ model.predict(df).drop(columns='ds') for model in self.loaded_models] 
             errors = [ mean_squared_error(prediction.values[0:length],ground_truth.values[0:length] ,sample_weight=weights, squared=False)  for prediction in predictions]
             pweights= [1/error for error in errors] 
             
             real_predictions = [ model.predict(true_pred_df).drop(columns='ds') for model in self.loaded_models] 
-            prediction_av = pd.concat(real_predictions,axis=0).apply(lambda x: np.average( weights=pweights))
+            prediction_av = pd.concat(real_predictions,axis=1).apply(lambda x: np.average(x, weights=pweights),axis=1).values
 
             return prediction_av
        
