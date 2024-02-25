@@ -7,7 +7,7 @@ import bittensor as bt
 from features import FeatureCollector, FeatureSource, FeatureScaler
 from hashing_utils import HashingUtils
 from miner_config import MinerConfig
-from mining_objects import BaseMiningModel
+from mining_objects import BaseMiningModel, AdaptiveMiningModel
 import numpy as np
 import os
 from streams.btcusd_5m import (
@@ -204,6 +204,115 @@ def update_predictions(
             time.sleep(15)
 
 
+def get_predictions_adaptive(
+    tims_ms: int,
+    feature_source: FeatureSource,
+    feature_scaler: FeatureScaler,
+    model: AdaptiveMiningModel,
+    prediction_type: str,
+):
+    
+    # TODO: interval should come from the stream definition
+    lookback_time_ms = tims_ms - (model.sample_count * INTERVAL_MS)
+
+    feature_samples = feature_source.get_feature_samples(
+        lookback_time_ms, INTERVAL_MS, model.sample_count,
+    )
+    # remove 
+    #feature_scaler.scale_feature_samples(feature_samples)
+
+    model_input = feature_source.feature_samples_to_pandas(feature_samples,start_time = lookback_time_ms,interval_ms=INTERVAL_MS)
+
+    
+    #futr = prepare_futr_datset(model_input)
+    last_set = model_input.iloc[-1200:-25] # drop last 25 candles 
+    print(f"Prediction Type is: {prediction_type}")
+    print(f"Last candle is : { model_input['ds'].tail(1).values[0]}")
+
+    
+    if prediction_type == 'select':
+
+        # check this 
+        best_model =  model.select_model(df=last_set,ground_truth=model_input['close'].tail(25))
+        print('run model')
+        model_name = best_model.models[0]
+        predicted_closes = best_model.predict(df=model_input)
+        
+    elif prediction_type == 'waverage': 
+        
+          predicted_closes = model.weighted_average_model(df=last_set,
+                                      ground_truth=model_input['close'].tail(25),
+                                      true_pred_df=model_input)
+          
+    else: 
+        
+        predicted_closes = model.average_model(df=model_input)
+        
+        
+        
+    prediction_size = model.prediction_length
+    predicted_closes = predicted_closes.drop(columns='ds').iloc[:,0].tolist()# change this 
+
+    if prediction_size== 101 : 
+            predicted_closes.append(predicted_closes[-1])
+
+    print(f"Raw predictions start with: {predicted_closes[0:19]}")
+        
+
+    return predicted_closes # needs to be a list
+   
+
+def update_predictions_adaptive(
+    stream_predictions: list[StreamPrediction],
+):
+    while not stopping:
+        current_time = datetime.now()
+        if current_time.second < 15:
+            bt.logging.debug(f"running update of predictions [{current_time}]")
+
+            for stream_prediction in stream_predictions:
+                try:
+                    stream_type = stream_prediction.stream_type
+                    if stream_type not in miner_preds:
+                        miner_preds[stream_type] = []
+                        bt.logging.info(
+                            f"stream type doesn't exist, setting to an empty list for [{stream_type}]"
+                        )
+
+                    bt.logging.debug(
+                        f"current predicted closes in memory [{miner_preds[stream_type]}]"
+                    )
+                    bt.logging.info(f"setting predictions for [{stream_type}]")
+                    
+                    pred_type = 'select' # ['select','average','waverage']
+
+                    prediction_array = get_predictions_adaptive(
+                        current_time.timestamp_ms(),
+                        model_feature_source,
+                        model_feature_scaler,
+                        base_mining_model,
+                        prediction_type = pred_type,
+                    )
+
+                    # TODO: Improve validators to allow multiple features in predictions
+                    predicted_closes = prediction_array.flatten().tolist()
+
+                    bt.logging.debug(f"predicted closes [{predicted_closes}]")
+
+                    # set preds in memory
+                    miner_preds[stream_type] = predicted_closes
+                    bt.logging.info(
+                        f"done setting predictions for [{stream_type}] "
+                        f"in memory with length [{len(predicted_closes)}]"
+                    )
+
+                # Log errors and continue operations
+                except Exception as e:  # noqa
+                    bt.logging.warning(f"error updating prediction: {e}")
+
+            time.sleep(15)
+
+
 def get_model_dir(model):
     return ValiConfig.BASE_DIR + "/mining_models/" + model
 
@@ -292,6 +401,13 @@ def main(config):
         "model_v5_1": {
             "id": "model5000",
             "filename": "model_v5_1.h5",
+            "sample_count": SAMPLE_COUNT,
+            "prediction_count": PREDICTION_COUNT,
+            "legacy_model": False,
+        },
+        "chaotic_adaptive": {
+            "id": "chaotic_adaptive",
+            "filename": "chaotic_adaptive",
             "sample_count": SAMPLE_COUNT,
             "prediction_count": PREDICTION_COUNT,
             "legacy_model": False,
@@ -584,7 +700,7 @@ def main(config):
     ]
 
     run_update_predictions = threading.Thread(
-        target=update_predictions,
+        target=update_predictions_adaptive,
         args=(stream_predictions,),
     )
     run_update_predictions.start()

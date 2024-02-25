@@ -1,1 +1,2 @@
 from .base_mining_model import BaseMiningModel
+from .adaptive_mining_model import AdaptiveMiningModel
