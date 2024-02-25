@@ -407,7 +407,7 @@ def main(config):
         },
         "chaotic_adaptive": {
             "id": "chaotic_adaptive",
-            "filename": "chaotic_adaptive",
+            "filename": "/mining_models/chaotic_adaptive/",
             "sample_count": SAMPLE_COUNT,
             "prediction_count": PREDICTION_COUNT,
             "legacy_model": False,
@@ -454,16 +454,34 @@ def main(config):
                 timeout=FEATURE_COLLECTOR_TIMEOUT,
             )
             model_feature_scaler = new_model_feature_scaler
+            
+            
+        if base_model_id == 'chaotic_adaptive': 
 
-        base_mining_model = BaseMiningModel(
-            filename=model_filename,
-            mode="r",
-            feature_count=len(model_feature_ids),
-            sample_count=model_chosen["sample_count"],
-            prediction_feature_count=len(prediction_feature_ids),
-            prediction_count=model_chosen["prediction_count"],
-            prediction_length=PREDICTION_LENGTH,
-        )
+    
+               print('Adaptive Mining Model Loaded')
+               base_mining_model = AdaptiveMiningModel(
+                filename=model_filename,
+                mode="r",
+                feature_count=len(model_feature_ids),
+                sample_count=model_chosen["sample_count"],
+                prediction_feature_count=len(prediction_feature_ids),
+                prediction_count=model_chosen["prediction_count"],
+                prediction_length=PREDICTION_LENGTH) \
+                .set_model_dir(model_filename) \
+                .load_models()
+                
+        else:
+
+            base_mining_model = BaseMiningModel(
+                filename=model_filename,
+                mode="r",
+                feature_count=len(model_feature_ids),
+                sample_count=model_chosen["sample_count"],
+                prediction_feature_count=len(prediction_feature_ids),
+                prediction_count=model_chosen["prediction_count"],
+                prediction_length=PREDICTION_LENGTH,
+            )
 
     else:
         bt.logging.debug("base model not chosen.")
