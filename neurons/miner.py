@@ -228,6 +228,7 @@ def get_predictions_adaptive(
     last_set = model_input.iloc[-1200:-25] # drop last 25 candles 
     print(f"Prediction Type is: {prediction_type}")
     print(f"Last candle is : { model_input['ds'].tail(1).values[0]}")
+    prediction_size = model.prediction_length
 
     
     if prediction_type == 'select':
@@ -237,7 +238,6 @@ def get_predictions_adaptive(
         print('run model')
         model_name = best_model.models[0]
         predicted_closes = best_model.predict(df=model_input)
-        prediction_size = model.prediction_length
         predicted_closes = predicted_closes.drop(columns='ds').iloc[:,0].tolist()# change this 
         
     elif prediction_type == 'waverage': 
