@@ -286,7 +286,7 @@ def update_predictions_adaptive(
                     )
                     bt.logging.info(f"setting predictions for [{stream_type}]")
                     
-                    pred_type = 'select' # ['select','average','waverage']
+                    pred_type = 'waverage' # ['select','average','waverage']
 
                     prediction_array = get_predictions_adaptive(
                         current_time.timestamp_ms(),
