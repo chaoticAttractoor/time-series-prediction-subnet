@@ -7,7 +7,7 @@ import resource
 import os 
 from neuralforecast import NeuralForecast
 import pandas as pd 
-from sklearn import mean_squared_error
+from sklearn.metrics import mean_squared_error
 def _get_dataset_options():
     dataset_options = tf.data.Options()
     dataset_options.experimental_distribute.auto_shard_policy = (
