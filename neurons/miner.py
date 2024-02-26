@@ -186,7 +186,7 @@ def update_predictions(
                     )
 
                     # TODO: Improve validators to allow multiple features in predictions
-                    predicted_closes = prediction_array.flatten().tolist()
+                    predicted_closes = prediction_array.tolist()
 
                     bt.logging.debug(f"predicted closes [{predicted_closes}]")
 
@@ -297,7 +297,7 @@ def update_predictions_adaptive(
                     )
 
                     # TODO: Improve validators to allow multiple features in predictions
-                    predicted_closes = prediction_array.flatten().tolist()
+                    predicted_closes = prediction_array.tolist()
 
                     bt.logging.debug(f"predicted closes [{predicted_closes}]")
 
