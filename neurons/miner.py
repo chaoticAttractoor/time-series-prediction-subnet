@@ -409,7 +409,7 @@ def main(config):
         },
         "chaotic_adaptive": {
             "id": "chaotic_adaptive",
-            "filename": "/mining_models/chaotic_adaptive/",
+            "filename": "/chaotic_adaptive/",
             "sample_count": SAMPLE_COUNT,
             "prediction_count": PREDICTION_COUNT,
             "legacy_model": False,
