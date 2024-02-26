@@ -35,7 +35,7 @@ class ResourceUsageCallback(Callback):
 
 
 
-class AdaptiveModelStack:
+class AdaptiveMiningModel:
     def __init__(
         self,
         filename: str,
