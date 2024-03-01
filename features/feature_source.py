@@ -5,7 +5,7 @@ from enum import IntEnum
 from features import FeatureID
 import numpy as np
 from numpy import ndarray
-
+import pandas as pd
 
 class FeatureCompaction(IntEnum):
     LAST = 0
@@ -211,6 +211,72 @@ class FeatureSource(ABC):
             results[feature_id] = array[feature_index][start:stop]
 
         return results
+    
+    def feature_samples_to_pandas(
+        self,
+        feature_samples: dict[FeatureID, ndarray],
+        feature_ids: list[FeatureID] = None,
+        start: int = 0,
+        stop: int = None,
+        dtype: np.dtype = np.float32,
+        interval_ms=int,
+        start_time = int,
+    ) -> ndarray:
+        if feature_ids is None:
+            feature_ids = self.feature_ids
+            feature_count = self.feature_count
+        else:
+            feature_count = len(feature_ids)
+
+        sample_count = None
+        for feature_id, samples in feature_samples.items():
+            feature_sample_count = len(samples)
+            if sample_count is None:
+                sample_count = feature_sample_count
+            elif feature_sample_count != sample_count:
+                raise RuntimeError(
+                    f"Feature {feature_id} has {feature_sample_count}"
+                    f" samples when {sample_count} expected."
+                )
+
+        if stop is None:
+            stop = sample_count
+        elif stop > sample_count:
+            raise ValueError()  # TODO: Implement
+
+        if start >= stop:
+            raise ValueError  # TODO: Implement
+
+        sample_count = stop - start
+        search_string = 'BTC_USD_CLOSE'
+        search_id = 101001
+        cols = [str(i) for i in feature_samples]
+        df = pd.DataFrame(feature_samples) 
+        #df['ds'] = pd.date_range(start=start, periods=sample_count, freq='5T') 
+        try: 
+            df['y'] = df[search_string]
+        except : 
+            if True : 
+                df['y'] = df[search_id]
+            else: 
+                raise ValueError('No matching columns found')
+        df['item_id'] = 'BTCUSD'
+        sample_count = df.shape[0] - 1
+        the_time = start_time
+        results =[] 
+        df['target'] = df['y'] 
+        results.append(the_time) 
+        for i in range(sample_count): 
+            the_time =  the_time+interval_ms
+            results.append(the_time) 
+
+
+        df.index = pd.to_datetime(results,unit='ms').values
+        
+        df = df[['target','item_id']]
+        
+        return df
+
 
 
 def get_feature_ids(feature_sources: list[FeatureSource]) -> list[FeatureID]:

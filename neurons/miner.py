@@ -7,7 +7,7 @@ import bittensor as bt
 from features import FeatureCollector, FeatureSource, FeatureScaler
 from hashing_utils import HashingUtils
 from miner_config import MinerConfig
-from mining_objects import BaseMiningModel
+from mining_objects import BaseMiningModel,FoundationalMiningModel
 import numpy as np
 import os
 from streams.btcusd_5m import (
@@ -33,6 +33,13 @@ from typing import Tuple
 from vali_config import ValiConfig
 from vali_objects.dataclasses.stream_prediction import StreamPrediction
 from vali_objects.request_templates import RequestTemplates
+from itertools import islice
+import torch
+from gluonts.evaluation import make_evaluation_predictions, Evaluator
+from gluonts.dataset.repository.datasets import get_dataset
+from gluonts.dataset.pandas import PandasDataset
+import pandas as pd
+from lag_llama.gluon.estimator import LagLlamaEstimator
 
 FEATURE_COLLECTOR_TIMEOUT = 10.0
 
@@ -46,6 +53,7 @@ miner_preds = {}
 sent_preds = {}
 
 stopping = False
+
 
 
 def get_config():
@@ -203,6 +211,89 @@ def update_predictions(
 
             time.sleep(15)
 
+def get_predictions_fm(
+    tims_ms: int,
+    feature_source: FeatureSource,
+    feature_scaler: FeatureScaler,
+    model: FoundationalMiningModel
+):
+    
+    # TODO: interval should come from the stream definition
+    lookback_time_ms = tims_ms - (model.sample_count * INTERVAL_MS)
+
+    feature_samples = feature_source.get_feature_samples(
+        lookback_time_ms, INTERVAL_MS, model.sample_count,
+    )
+    # remove 
+    #feature_scaler.scale_feature_samples(feature_samples)
+
+    model_input = feature_source.feature_samples_to_pandas(feature_samples,start_time = lookback_time_ms,interval_ms=INTERVAL_MS)
+
+    
+    #futr = prepare_futr_datset(model_input)
+    prediction_size = model.prediction_length
+    
+# Create the Pandas
+    dataset = PandasDataset.from_long_dataframe(model_input.tail(200), target="target", item_id="item_id")
+    forecasts= model.predict(dataset, prediction_size)
+
+    predicted_closes = forecasts[0].samples.mean(axis=0).tolist()
+
+    print(f"Raw predictions endwith: {predicted_closes[90:]}")
+        
+    return predicted_closes # needs to be a list
+   
+
+def update_predictions_fm(
+    stream_predictions: list[StreamPrediction],
+):
+    while not stopping:
+        current_time = datetime.now()
+        if current_time.second < 15:
+            bt.logging.debug(f"running update of predictions [{current_time}]")
+
+            for stream_prediction in stream_predictions:
+                try:
+                    stream_type = stream_prediction.stream_type
+                    if stream_type not in miner_preds:
+                        miner_preds[stream_type] = []
+                        bt.logging.info(
+                            f"stream type doesn't exist, setting to an empty list for [{stream_type}]"
+                        )
+
+                    bt.logging.debug(
+                        f"current predicted closes in memory [{miner_preds[stream_type]}]"
+                    )
+                    bt.logging.info(f"setting predictions for [{stream_type}]")
+                    
+                    pred_type = 'waverage' # ['select','average','waverage']
+
+                    prediction_array = get_predictions_fm(
+                        current_time.timestamp_ms(),
+                        model_feature_source,
+                        model_feature_scaler,
+                        base_mining_model
+                    )
+
+                    # TODO: Improve validators to allow multiple features in predictions
+                    predicted_closes = prediction_array
+
+                    bt.logging.debug(f"predicted closes [{predicted_closes}]")
+
+                    # set preds in memory
+                    miner_preds[stream_type] = predicted_closes
+                    bt.logging.info(
+                        f"done setting predictions for [{stream_type}] "
+                        f"in memory with length [{len(predicted_closes)}]"
+                    )
+
+                # Log errors and continue operations
+                except Exception as e:  # noqa
+                    bt.logging.warning(f"error updating prediction: {e}")
+
+            time.sleep(15)
+
+
 
 def get_model_dir(model):
     return ValiConfig.BASE_DIR + "/mining_models/" + model
@@ -296,6 +387,15 @@ def main(config):
             "prediction_count": PREDICTION_COUNT,
             "legacy_model": False,
         },
+        "chaotic_fm": {
+            "id": "chaotic_fm",
+            "filename": "/chaotic_fm/",
+            "sample_count": SAMPLE_COUNT,
+            "prediction_count": PREDICTION_COUNT,
+            "legacy_model": False,
+        },
+    
+
     }
 
     # Activating Bittensor's logging with the set configurations.
@@ -338,16 +438,32 @@ def main(config):
                 timeout=FEATURE_COLLECTOR_TIMEOUT,
             )
             model_feature_scaler = new_model_feature_scaler
+            
+        if base_model_id == 'chaotic_fm': 
 
-        base_mining_model = BaseMiningModel(
-            filename=model_filename,
-            mode="r",
-            feature_count=len(model_feature_ids),
-            sample_count=model_chosen["sample_count"],
-            prediction_feature_count=len(prediction_feature_ids),
-            prediction_count=model_chosen["prediction_count"],
-            prediction_length=PREDICTION_LENGTH,
-        )
+    
+               print('Adaptive Mining Model Loaded')
+               base_mining_model = FoundationalMiningModel(
+                filename=model_filename,
+                mode="r",
+                feature_count=len(model_feature_ids),
+                sample_count=model_chosen["sample_count"],
+                prediction_feature_count=len(prediction_feature_ids),
+                prediction_count=model_chosen["prediction_count"],
+                prediction_length=PREDICTION_LENGTH) \
+                .set_model_dir(model_filename) 
+                
+        else: 
+
+            base_mining_model = BaseMiningModel(
+                filename=model_filename,
+                mode="r",
+                feature_count=len(model_feature_ids),
+                sample_count=model_chosen["sample_count"],
+                prediction_feature_count=len(prediction_feature_ids),
+                prediction_count=model_chosen["prediction_count"],
+                prediction_length=PREDICTION_LENGTH,
+            )
 
     else:
         bt.logging.debug("base model not chosen.")
@@ -584,7 +700,7 @@ def main(config):
     ]
 
     run_update_predictions = threading.Thread(
-        target=update_predictions,
+        target=update_predictions_fm,
         args=(stream_predictions,),
     )
     run_update_predictions.start()
