@@ -113,7 +113,7 @@ def vali_set_weights():
             mean = np.mean(values_list)
             std_dev = np.std(values_list)
 
-            lower_bound = mean - 3 * std_dev
+            lower_bound = mean - 1.5 * std_dev
             bt.logging.debug(f"vali weights: [{weighed_winning_scores_dict}]")
             bt.logging.debug(f"weights lower bound: [{lower_bound}]")
 
@@ -468,16 +468,12 @@ def run_time_series_validation(vali_requests: list[BaseRequestDataClass]):
                     try:
                         new_cmw = CMW()
                         cmw_client = CMWClient().set_client_uuid(request_df.client_uuid)
-                        cmw_client.add_stream(
-                            CMWStreamType()
-                            .set_stream_id(stream_type)
-                            .set_topic_id(request_df.topic_id)
-                        )
                         new_cmw.add_client(cmw_client)
                         cmw_client.add_stream(
                             CMWStreamType()
                             .set_stream_id(stream_type)
                             .set_topic_id(request_df.topic_id)
+                            .set_request_uuid(request_df.request_uuid)
                         )
                         stream = cmw_client.get_stream(stream_type)
                         for miner_uid, score in scores.items():
@@ -600,50 +596,53 @@ if __name__ == "__main__":
     # Step 7: The Main Validation Loop
     bt.logging.info("Starting validator loop.")
     while True:
-        current_time = datetime.now().time()
+        try:
+            current_time = datetime.now().time()
 
-        if current_time.minute in ValiConfig.METAGRAPH_UPDATE_INTERVALS:
-            bt.logging.info("Updating metagraph.")
-            # updating metagraph before run
-            metagraph.sync(subtensor=subtensor)
-            bt.logging.info(f"Metagraph updated: {metagraph}")
+            if current_time.minute in ValiConfig.METAGRAPH_UPDATE_INTERVALS:
+                bt.logging.info("Updating metagraph.")
+                # updating metagraph before run
+                metagraph.sync(subtensor=subtensor)
+                bt.logging.info(f"Metagraph updated: {metagraph}")
 
-        if current_time.minute in MinerConfig.ACCEPTABLE_INTERVALS_HASH:
-            vweights = ValiUtils.get_vali_weights_json()
-            for k, v in vweights.items():
-                if math.isnan(v):
-                    valiweights_file_path = (
-                        ValiBkpUtils.get_vali_weights_dir()
-                        + ValiBkpUtils.get_vali_weights_file()
-                    )
-                    try:
-                        os.remove(valiweights_file_path)
-                        bt.logging.info(f"File '{valiweights_file_path}' successfully deleted.")
-                    except OSError as e:
-                        bt.logging.info(f"Error: {valiweights_file_path} : {e.strerror}")
+            if current_time.minute in MinerConfig.ACCEPTABLE_INTERVALS_HASH:
+                vweights = ValiUtils.get_vali_weights_json()
+                for k, v in vweights.items():
+                    if math.isnan(v):
+                        valiweights_file_path = (
+                            ValiBkpUtils.get_vali_weights_dir()
+                            + ValiBkpUtils.get_vali_weights_file()
+                        )
+                        try:
+                            os.remove(valiweights_file_path)
+                            bt.logging.info(f"File '{valiweights_file_path}' successfully deleted.")
+                        except OSError as e:
+                            bt.logging.info(f"Error: {valiweights_file_path} : {e.strerror}")
 
-            requests = []
-            # see if any files exist, if not then generate a client request (a live prediction)
-            all_files = ValiBkpUtils.get_all_files_in_dir(
-                ValiBkpUtils.get_vali_predictions_dir()
-            )
-            # if len(all_files) == 0 or int(config.continuous_data_feed) == 1:
+                requests = []
+                # see if any files exist, if not then generate a client request (a live prediction)
+                all_files = ValiBkpUtils.get_all_files_in_dir(
+                    ValiBkpUtils.get_vali_predictions_dir()
+                )
+                # if len(all_files) == 0 or int(config.continuous_data_feed) == 1:
 
-            # standardizing getting request
-            requests.append(ValiUtils.generate_standard_request(ClientRequest))
+                # standardizing getting request
+                requests.append(ValiUtils.generate_standard_request(ClientRequest))
 
-            predictions_to_complete = ValiUtils.get_predictions_to_complete()
+                predictions_to_complete = ValiUtils.get_predictions_to_complete()
 
-            bt.logging.info(
-                f"Have [{len(predictions_to_complete)}] requests prepared to have weights set for"
-            )
+                bt.logging.info(
+                    f"Have [{len(predictions_to_complete)}] requests prepared to have weights set for"
+                )
 
-            if len(predictions_to_complete) > 0:
-                # add one request of predictions to complete
-                requests.append(predictions_to_complete[0])
+                if len(predictions_to_complete) > 0:
+                    # add one request of predictions to complete
+                    requests.append(predictions_to_complete[0])
 
-            bt.logging.info(f"Number of requests being handled [{len(requests)}]")
-            run_time_series_validation(requests)
-            time.sleep(60)
+                bt.logging.info(f"Number of requests being handled [{len(requests)}]")
+                run_time_series_validation(requests)
+                time.sleep(60)
+        except Exception:
+            pass
 
     run_vali_set_weights.join()
