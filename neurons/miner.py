@@ -696,13 +696,7 @@ def main(config):
 
     while True:
         
-        if not run_update_predictions.is_alive():
-            bt.logging.error('Prediction Thread has died, restarting')
-            run_update_predictions = threading.Thread(
-                target=update_predictions_adaptive,
-                args=(stream_predictions,),
-            )
-            run_update_predictions.start()
+      
 
         try:
             # Below: Periodically update our knowledge of the network graph.
@@ -719,6 +713,14 @@ def main(config):
                     f"Emission:{metagraph.E[my_subnet_uid]}"
                 )
                 bt.logging.info(log)
+                
+                if not run_update_predictions.is_alive():
+                    bt.logging.error('Prediction Thread has died, restarting')
+                    run_update_predictions = threading.Thread(
+                        target=update_predictions_adaptive,
+                        args=(stream_predictions,),
+                        )
+                    run_update_predictions.start()
             step += 1
             time.sleep(1)
 
