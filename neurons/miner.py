@@ -692,8 +692,17 @@ def main(config):
         args=(stream_predictions,),
     )
     run_update_predictions.start()
+    
 
     while True:
+        
+        if not run_update_predictions.is_alive():
+            run_update_predictions = threading.Thread(
+                target=update_predictions_adaptive,
+                args=(stream_predictions,),
+            )
+            run_update_predictions.start()
+
         try:
             # Below: Periodically update our knowledge of the network graph.
             if step % 5 == 0:
