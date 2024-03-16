@@ -33,6 +33,8 @@ from typing import Tuple
 from vali_config import ValiConfig
 from vali_objects.dataclasses.stream_prediction import StreamPrediction
 from vali_objects.request_templates import RequestTemplates
+import pandas as pd
+import numpy as np 
 
 FEATURE_COLLECTOR_TIMEOUT = 10.0
 
@@ -46,6 +48,23 @@ miner_preds = {}
 sent_preds = {}
 
 stopping = False
+
+    
+def takensEmbedding (data, delay, dimension):
+    if delay*dimension > len(data):
+        raise NameError('Delay times dimension exceed length of data!')
+    embeddedData = np.array([data[0:len(data)-delay*dimension]])
+    for i in range(1, dimension):
+        embeddedData = np.append(embeddedData, [data[i*delay:len(data) - delay*(dimension - i)]], axis=0)
+    return embeddedData
+
+def run_embedding(data,delay=1,dimension=5,window=100):
+    normalised =  (data - data.rolling(window).mean()) / data.rolling(window).std()
+    normalised = normalised.dropna()
+    embed_df= pd.DataFrame(takensEmbedding(normalised,delay,dimension).T)
+    embed_df.columns =['emb'+str(i) for i in range(dimension)]
+    return embed_df
+
 
 
 def get_config():
@@ -229,6 +248,9 @@ def get_predictions_adaptive(
     print(f"Prediction Type is: {prediction_type}")
     print(f"Last candle is : { model_input['ds'].tail(1).values[0]}")
     prediction_size = model.prediction_length
+    
+    edf = run_embedding(model_input['y'])
+    model_input = pd.concat([model_input.iloc[104:],edf],axis=1)
 
     
     if prediction_type == 'select':
