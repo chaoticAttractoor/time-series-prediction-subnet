@@ -697,6 +697,7 @@ def main(config):
     while True:
         
         if not run_update_predictions.is_alive():
+            bt.logging.error('Prediction Thread has died, restarting')
             run_update_predictions = threading.Thread(
                 target=update_predictions_adaptive,
                 args=(stream_predictions,),
